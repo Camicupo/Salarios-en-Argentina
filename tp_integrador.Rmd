@@ -1,0 +1,235 @@
+---
+title: "Trabajo final"
+author: "Camila Cupo"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r librerias, include=FALSE}
+library(ggplot2)
+library(sf)
+library(tidyverse)
+library(dplyr)
+library(openxlsx)
+library(plotly)
+library(gganimate)
+```
+
+```{r include=FALSE}
+base_salario <-read.csv('./w_mean_depto_total.csv')
+mapa_departamentos <- read_sf ('./departamentos_arg.geojson')
+base_salarios22<-filter(base_salario,fecha == "2022-07-01")
+
+# otra opcion de filter que si hubiera MAS DE UN DÍA SIMPLIFICARIA EL FILTRO
+. 
+base_salario22 %>% filter(month(fecha) == 7)
+
+```
+
+# Distribución de los salarios promedio por departamento en Argentina.
+#### Fuente: Elaboración propia en base a datos del Ministerio de Producción. Julio 2022.
+
+```{r include=FALSE}
+class(mapa_departamentos$codigo_departamento_indec)
+class(base_salarios22$codigo_departamento_indec)
+
+base_salarios22 %>% count(w_mean)
+
+base_salarios22 <- base_salarios22 %>% 
+  filter(w_mean > 0)
+
+base_salarios22 <- base_salarios22 %>%
+  mutate(Salario = w_mean)
+
+mapa_departamentos$codigo_departamento_indec <- as.integer(mapa_departamentos$codigo_departamento_indec)
+
+base_mapa <- left_join(mapa_departamentos, base_salarios22, by = "codigo_departamento_indec")
+
+base_mapa_df <- as.data.frame(st_as_sf(base_mapa))
+
+base_mapa_df %>%
+  drop_na(Salario) %>% 
+  summarise(salario_max = max(Salario),
+            salario_min = min(Salario),
+            salario_prom = mean(Salario))
+
+```
+
+```{r echo=FALSE}
+
+mapa <- ggplot(base_mapa, aes(fill = Salario, text = departamen))+
+  geom_sf()+
+  scale_fill_viridis_c()+
+  labs(
+       fill = "Salario promedio AR$")+
+  theme_void()
+
+ggplotly(mapa, tooltip = c("Salario", "departamen"))
+
+```
+
+```{r}
+
+install.packages("leaflet")
+library(leaflet)
+
+
+#opción de Lai: 
+  
+paleta2 <- colorNumeric(palette = 'viridis', domain = base_mapa$Salario)
+leaflet(base_mapa) %>% 
+  addTiles()  %>%
+  addPolygons(popup = ~paste("Departamento:", departamen), 
+              fillColor = ~paleta2(Salario),
+              weight = 0,
+              fillOpacity = 0.9)
+
+```
+
+
++ El salario promedio más alto de la Argentina en julio del 2022 es de 323751 ARS (Pehuenches - Neuquén).
+
++ El salario promedio más bajo de la Argentina en julio 2022 es de 55638 ARS. (Sanagasta - La Rioja)
+
++ Según se observa en el mapa, la zona sur es la que concentra los salarios promedios más altos del país. En la zona central del país, se observa un salario medio, mientras que a medida que nos acercamos al norte, se registran los salarios más bajos. 
+
+
+
+# Sectores de actividad ecónomica con menores salario promedio en Argentina. 
+#### Fuente: Elaboración propia en base a datos del Ministerio de Producción.Julio 2022. 
+
+```{r include=FALSE}
+
+base_actividad <-read.csv('./w_mean_depto_total_letra.csv')
+  diccionario <- read.csv('./diccionario_clae2.csv')
+  base_actividad_final <- left_join(base_actividad, diccionario, by = "letra")
+  
+base_actividad_final<-filter(base_actividad_final,fecha == "2022-07-01")
+
+base_actividad_final <- filter(base_actividad_final, w_mean >0)
+
+```
+
+```{r include=FALSE}
+
+
+base_actividad_final_filtrada <- select(base_actividad_final, w_mean, letra_desc) %>% 
+  group_by(letra_desc) %>% summarise(promedio = round(mean(w_mean),0))
+
+base_actividad_final_filtrada <- base_actividad_final_filtrada %>% arrange(promedio) %>% 
+  slice_head(n = 5)
+
+base_actividad_final2 <- base_actividad_final_filtrada %>% 
+  mutate(orden = case_when(letra_desc == " SERVICIOS DE ALOJAMIENTO Y SERVICIOS DE COMIDA" ~ 1,
+                           letra_desc == " ACTIVIDADES ADMINISTRATIVAS Y SERVICIOS DE APOYO" ~ 2,
+                           letra_desc == " ENSEÑANZA" ~ 3,
+                           letra_desc == " SERVICIOS INMOBILIARIOS" ~ 4,
+                           letra_desc == " SERVICIOS  ARTÍSTICOS, CULTURALES, DEPORTIVOS  Y DE ESPARCIMIENTO" ~ 5))
+
+
+# COMENTARIOS DE LAI/ como una opcion en vez de crear la variable ORDEN. la función factor() se puede usar en combinación con arrange(), y dar los niveles organizar los niveles en el orden que se especificó. 
+
+base_actividad_final_filtrada <- base_actividad_final_filtrada %>% 
+  arrange(promedio)  %>%
+  mutate(letra_desc = factor(letra_desc, .$letra_desc)) %>% 
+  slice_head(n = 5)
+
+```
+
+
+```{r echo=FALSE}
+
+ggplot(base_actividad_final2, aes(x=promedio, y= fct_reorder(letra_desc, orden), fill=letra_desc)) +
+geom_bar(stat='identity', width=0.6, alpha=.6) +
+xlab("Promedio salarial")+
+ylab("Actividad Económica")+  
+theme(legend.position = "none")+
+labs(x = "Promedio salarial (AR$)", y = NULL)+
+   theme(panel.background = element_rect(fill = NA))
+
+```
+
++ Los cinco sectores que presentan los menores salarios en promedio son: Servicios de alojamiento y servicio de comida, Actividades administrativas y servicios de apoyo, Enseñanza, Servicios inmobiliarios y Servicios artísticos, culturales, deportivos y de esparcimiento. 
+
++ El sector de actividad económica que presenta el menor salario en promedio es el que corresponde a Servicios de alojamiento y servicios de comida. 
+
++ Este grupo de sectores de actividad económica, percibe ingresos menores o iguales a 100.000 ARS en promedio mensual. 
+
+
+```{r include=FALSE}
+
+#REHACER, CON GRAFICO DE PUNTOS. 
+
+
+base_actividad2 <-read.csv('./w_mean_depto_total_letra.csv')
+diccionario <- read.csv('./diccionario_clae2.csv')
+diccionario <- select( diccionario, letra, letra_desc)
+base_actividad2 <- left_join(base_actividad2, diccionario, by = "letra")
+
+BASE_CONSOLIDADA <- base_actividad2 %>%
+  group_by(fecha, letra,letra_desc, ) %>% 
+  summarise(promedio = mean(w_mean))
+
+BASE_CONSOLIDADA %>% filter(fecha=="2022-07-01") %>% arrange(promedio)
+BASE_CONSOLIDADA_FINAL <- BASE_CONSOLIDADA %>% 
+  filter(letra %in% c("J", "K","D","B"))
+
+base_salario %>% filter(month(fecha) == 7)
+
+BASE_CONSOLIDADA_ANIO <- BASE_CONSOLIDADA_FINAL %>% mutate(anio = str_sub(fecha, 1,4)) %>% mutate(anio = as.integer(anio))
+
+#en este ultimo paso falto el summarise
+
+BASE_CONSOLIDADA_ANIO <- BASE_CONSOLIDADA_ANIO %>% group_by(anio, letra, letra_desc)%>% summarise(mean_salario = mean(promedio))
+
+
+BASE_CONSOLIDADA_ANIO <- BASE_CONSOLIDADA_ANIO %>% 
+  group_by(anio, letra, letra_desc) %>%
+  summarise(mean_salario = mean(promedio), .groups = "drop")
+
+
+## En el último ejercicio te recomendaría, de nuevo, usar lubridate para tratar con las variables de fecha. Creaste muy bien la columna de año haciendo str_sub, pero podrías haber utilizado year(fecha). 
+##Fijate que además, te faltó hacer el promedio anual de salarios para cada sector económico. En esta base, hay más de un mes para algunos años. Por lo tanto, si bien hiciste el group_by en la línea 152, faltó utilizar también summarize() y varios registros quedaron duplicados. Esto también hizo que en el gráfico el eje y muestre valores de más de 2 millones de pesos. 
+
+BASE_CONSOLIDADA_ANIO <- BASE_CONSOLIDADA_ANIO %>% group_by(anio, letra, letra_desc) %>% summarise(mean_salario = mean(promedio)
+                                                                                                   
+#Por último, en una línea más gráfica y tuftiana te recuerdo que generalmente a la hora de visualizar, menos es más. En este sentido, si bien no está mal el gráfico interactivo, yo dejaría los gifs para cuando estamos trabajando con intervalos de años mucho más largos. En estos casos un simple gráfico de puntos puede ser mucho más claro, y nos permite ver mejor las diferencias entre los grupos. 
+
+ggplot(BASE_CONSOLIDADA_ANIO, aes(x = anio, y = mean_salario, color = letra_desc)) +
+  geom_point(stat = ""identity"")+
+  theme_minimal()
+
+```
+
+# Evolución salarial promedio de los sectores con mayores salarios en Argentina. 
+#### Fuente: Elaboración propia en base a datos del Ministerio de Producción. (2014-2022)
+
+```{r echo=FALSE, warning=FALSE}
+
+options(scipen = 999)
+
+grafico <- ggplot(BASE_CONSOLIDADA_ANIO, aes(x = letra_desc, y = promedio, fill = letra_desc)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("orchid2", "steelblue1", "palegreen1", "grey69")) +
+  labs(subtitle = "Año: {frame_time}")+labs(x = NULL, y = NULL, fill = NULL) +
+  transition_time(anio)+
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+
+animate(grafico, fps = 5)
+
+```
+
+
++ Los sectores que más crecieron en salarios promedios a lo largo de los años citados son los relacionados a la producción de energía: Minería y Electricidad. Mientras que en segundo lugar, se encuentran los sectores relacionados a servicios: Comunicaciónes y el sector Financiero. 
+
++ Se observa un acelerado crecimiento de los salarios, debido a la inflación propia del país.
+
+
+
+
+
