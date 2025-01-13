@@ -24,10 +24,6 @@ base_salario <-read.csv('./w_mean_depto_total.csv')
 mapa_departamentos <- read_sf ('./departamentos_arg.geojson')
 base_salarios22<-filter(base_salario,fecha == "2022-07-01")
 
-# otra opcion de filter que si hubiera MAS DE UN DÍA SIMPLIFICARIA EL FILTRO
-. 
-base_salario22 %>% filter(month(fecha) == 7)
-
 ```
 
 # Distribución de los salarios promedio por departamento en Argentina.
@@ -123,16 +119,6 @@ base_actividad_final_filtrada <- select(base_actividad_final, w_mean, letra_desc
 base_actividad_final_filtrada <- base_actividad_final_filtrada %>% arrange(promedio) %>% 
   slice_head(n = 5)
 
-base_actividad_final2 <- base_actividad_final_filtrada %>% 
-  mutate(orden = case_when(letra_desc == " SERVICIOS DE ALOJAMIENTO Y SERVICIOS DE COMIDA" ~ 1,
-                           letra_desc == " ACTIVIDADES ADMINISTRATIVAS Y SERVICIOS DE APOYO" ~ 2,
-                           letra_desc == " ENSEÑANZA" ~ 3,
-                           letra_desc == " SERVICIOS INMOBILIARIOS" ~ 4,
-                           letra_desc == " SERVICIOS  ARTÍSTICOS, CULTURALES, DEPORTIVOS  Y DE ESPARCIMIENTO" ~ 5))
-
-
-# COMENTARIOS DE LAI/ como una opcion en vez de crear la variable ORDEN. la función factor() se puede usar en combinación con arrange(), y dar los niveles organizar los niveles en el orden que se especificó. 
-
 base_actividad_final_filtrada <- base_actividad_final_filtrada %>% 
   arrange(promedio)  %>%
   mutate(letra_desc = factor(letra_desc, .$letra_desc)) %>% 
@@ -141,15 +127,26 @@ base_actividad_final_filtrada <- base_actividad_final_filtrada %>%
 ```
 
 
-```{r echo=FALSE}
+```{r}
 
-ggplot(base_actividad_final2, aes(x=promedio, y= fct_reorder(letra_desc, orden), fill=letra_desc)) +
-geom_bar(stat='identity', width=0.6, alpha=.6) +
-xlab("Promedio salarial")+
-ylab("Actividad Económica")+  
-theme(legend.position = "none")+
-labs(x = "Promedio salarial (AR$)", y = NULL)+
-   theme(panel.background = element_rect(fill = NA))
+library(ggplot2)
+
+ggplot(base_actividad_final2, aes(x = promedio, y = fct_reorder(letra_desc, orden), fill = promedio)) +
+  geom_col(position = "stack", width = 0.6, alpha = 0.8) +
+  geom_text(aes(label = promedio), position = position_stack(vjust = 0.5), size = 3) +
+  scale_fill_gradientn(colors = c("lightblue", "darkblue")) +  # Ajusta los colores del gradiente según tu preferencia
+  labs(
+    x = "Promedio salarial mensual (ARS)",
+    y = "Actividad Económica",
+    title = "Sectores de actividad ecónomica con menores salario promedio en Argentina
+    (Julio 2022)",caption = "Fuente: [Elaboración propia en base a datos del Ministerio de Producción.]"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    panel.grid.major.x = element_line(color = "gray80"),
+    panel.grid.minor.x = element_blank()
+  )
 
 ```
 
